@@ -37,3 +37,5 @@ build/
 
 ### Mac OS ###
 .DS_Store
+### 本地模拟集群数据 ###
+data/
