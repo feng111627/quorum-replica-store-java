@@ -80,4 +80,32 @@ class ApiSmokeTest {
         log.info("[业务:REST冒烟][用例:恢复后节点状态] body={}", nodes2.getBody());
         assertEquals(Boolean.TRUE, nodes2.getBody().get("a1"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void inspectAndConvergeEndpoints() {
+        http.exchange(url("/kv/insp-smoke"), HttpMethod.PUT,
+                new HttpEntity<>(Map.of("value", "v", "opId", "smoke-insp")), Map.class);
+
+        // 只读巡检：单键 + 全库
+        ResponseEntity<Map> one = http.getForEntity(url("/admin/inspect?key=insp-smoke"), Map.class);
+        log.info("[业务:REST冒烟][用例:巡检单键] status={} body={}", one.getStatusCode(), one.getBody());
+        assertEquals(HttpStatus.OK, one.getStatusCode());
+        Map<String, Object> keyReport = ((java.util.List<Map<String, Object>>) one.getBody().get("keys")).get(0);
+        assertEquals("CONSISTENT", keyReport.get("diagnosis"));
+
+        ResponseEntity<Map> all = http.getForEntity(url("/admin/inspect"), Map.class);
+        log.info("[业务:REST冒烟][用例:巡检全库] status={} body={}", all.getStatusCode(), all.getBody());
+        assertEquals(HttpStatus.OK, all.getStatusCode());
+        assertNotNull(all.getBody().get("summary"));
+
+        // 按需收敛：单键 + 全库（幂等，已一致时报告无动作）
+        ResponseEntity<Map> c1 = http.postForEntity(url("/admin/converge?key=insp-smoke"), null, Map.class);
+        log.info("[业务:REST冒烟][用例:收敛单键] status={} body={}", c1.getStatusCode(), c1.getBody());
+        assertEquals(HttpStatus.OK, c1.getStatusCode());
+
+        ResponseEntity<Map> c2 = http.postForEntity(url("/admin/converge"), null, Map.class);
+        log.info("[业务:REST冒烟][用例:收敛全库] status={} body={}", c2.getStatusCode(), c2.getBody());
+        assertEquals(HttpStatus.OK, c2.getStatusCode());
+    }
 }
