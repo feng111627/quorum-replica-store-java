@@ -46,10 +46,10 @@ class RecoveryTest {
         ReplicaNode node = registry.node(replicaId);
 
         node.down(); // 模拟宕机：内存丢失
-        assertTrue(node.localGet("rk1") == null, "下线节点不应响应");
+        assertTrue(node.localCommittedGet("rk1") == null, "下线节点不应响应");
         node.up();   // 模拟重启：从 WAL 恢复
 
-        List<VersionedValue> local = node.localGet("rk1");
+        List<VersionedValue> local = node.localCommittedGet("rk1");
         log.info("[业务:故障与恢复][用例:重启恢复已提交状态] 节点={} 恢复版本数={} value={} 期望=1/committed-value",
                 replicaId, local.size(), local.isEmpty() ? null : local.get(0).value());
         assertEquals(1, local.size());
@@ -98,7 +98,7 @@ class RecoveryTest {
         node.down();
         node.up(); // 重放两次 WAL
 
-        List<VersionedValue> local = node.localGet("rk4");
+        List<VersionedValue> local = node.localCommittedGet("rk4");
         log.info("[业务:故障与恢复][用例:WAL重放幂等] 节点={} 两次重启后版本数={} 期望=1（无版本错乱）",
                 replicaId, local.size());
         assertEquals(1, local.size());
@@ -125,7 +125,7 @@ class RecoveryTest {
         assertEquals("new-committed", g.values().get(0).value());
 
         // 验证读修复：重新加入的副本现在也持有了已提交的新值
-        List<VersionedValue> local = staleNode.localGet(key);
+        List<VersionedValue> local = staleNode.localCommittedGet(key);
         log.info("[业务:故障与恢复][用例:过期副本重新加入] 读修复后副本 {} 本地版本数={} value={}",
                 replicas.get(0), local.size(), local.isEmpty() ? null : local.get(0).value());
         assertEquals(1, local.size());

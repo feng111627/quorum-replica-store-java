@@ -26,7 +26,8 @@ public class ClusterConfig {
     public Coordinator coordinator(
             NodeRegistry registry,
             @Value("${cluster.write-quorum:2}") int writeQuorum,
-            @Value("${cluster.read-quorum:2}") int readQuorum) {
-        return new Coordinator(registry, writeQuorum, readQuorum);
+            @Value("${cluster.read-quorum:2}") int readQuorum,
+            @Value("${cluster.data-dir:./data}") String dataDir) {
+        return new Coordinator(registry, writeQuorum, readQuorum, Path.of(dataDir));
     }
 }

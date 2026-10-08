@@ -80,4 +80,54 @@ class ApiSmokeTest {
         log.info("[业务:REST冒烟][用例:恢复后节点状态] body={}", nodes2.getBody());
         assertEquals(Boolean.TRUE, nodes2.getBody().get("a1"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void inspectAndRepairEndpoints() {
+        String key = "inspect-http-key";
+        // 同一上下文可能被前一用例下线过节点，先全部恢复
+        for (String n : new String[] {"a1", "a2", "a3", "a4", "a5"}) {
+            http.postForEntity(url("/admin/nodes/" + n + "/up"), null, Map.class);
+        }
+        // 先写一个已提交值，并读一次触发读修复把第三个副本补齐
+        ResponseEntity<Map> w = http.exchange(url("/kv/" + key), HttpMethod.PUT,
+                new HttpEntity<>(Map.of("value", "v1", "opId", "insp-1")), Map.class);
+        assertEquals(HttpStatus.OK, w.getStatusCode());
+        assertEquals(HttpStatus.OK, http.getForEntity(url("/kv/" + key), Map.class).getStatusCode());
+
+        // 只读巡检：单键
+        ResponseEntity<Map> one = http.getForEntity(url("/admin/inspect/keys/" + key), Map.class);
+        log.info("[业务:REST冒烟][用例:巡检单键] body={}", one.getBody());
+        assertEquals(HttpStatus.OK, one.getStatusCode());
+        assertEquals(Boolean.TRUE, one.getBody().get("consistent"));
+
+        // 只读巡检：整库
+        ResponseEntity<Map> all = http.getForEntity(url("/admin/inspect"), Map.class);
+        log.info("[业务:REST冒烟][用例:巡检整库] keyCount={} consistent={}",
+                all.getBody().get("keyCount"), all.getBody().get("consistent"));
+        assertEquals(HttpStatus.OK, all.getStatusCode());
+
+        // 按需收敛：单键 + 整库，重复触发
+        ResponseEntity<Map> r1 = http.postForEntity(url("/admin/repair/keys/" + key), null, Map.class);
+        ResponseEntity<Map> r2 = http.postForEntity(url("/admin/repair/keys/" + key), null, Map.class);
+        ResponseEntity<java.util.List> rall = http.postForEntity(url("/admin/repair"), null, java.util.List.class);
+        log.info("[业务:REST冒烟][用例:按需收敛] firstChanged={} secondChanged={} 整库条目数={}",
+                r1.getBody().get("changed"), r2.getBody().get("changed"), rall.getBody().size());
+        assertEquals(HttpStatus.OK, r1.getStatusCode());
+        assertEquals(Boolean.FALSE, r2.getBody().get("changed"), "重复收敛应当幂等无改动");
+
+        // 本地版本视图带上提交状态（从巡检结果取一个确实持有该键的副本）
+        java.util.List<Map<String, Object>> reps =
+                (java.util.List<Map<String, Object>>) one.getBody().get("replicas");
+        Map<String, Object> holder = reps.stream()
+                .filter(x -> !((java.util.List<?>) x.get("versions")).isEmpty())
+                .findFirst().orElseThrow();
+        String replicaId = (String) holder.get("nodeId");
+        ResponseEntity<java.util.List> local =
+                http.getForEntity(url("/admin/nodes/" + replicaId + "/keys/" + key), java.util.List.class);
+        log.info("[业务:REST冒烟][用例:本地版本视图] 副本={} body={}", replicaId, local.getBody());
+        assertEquals(HttpStatus.OK, local.getStatusCode());
+        Map<String, Object> first = (Map<String, Object>) local.getBody().get(0);
+        assertEquals("COMMITTED", first.get("state"));
+    }
 }

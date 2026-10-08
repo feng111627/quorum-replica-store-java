@@ -94,7 +94,7 @@ class ConflictTest {
         VectorClock staleClock = new VectorClock(Map.of("w:op-1", 1L)); // 只含 op-1，落后于已提交版本
         List<String> replicas = registry.router().replicasOf("k3");
         ReplicaNode node = registry.node(replicas.get(0));
-        ReplicaNode.WriteAck ack = node.localPut("op-stale", "k3", "old-value", null, staleClock, false);
+        ReplicaNode.WriteAck ack = node.localPrepare("op-stale", "k3", "old-value", staleClock, false);
         log.info("[业务:并发写冲突][用例:过期写拒绝] accepted={} stale={} 期望=false/true",
                 ack.accepted(), ack.stale());
         assertFalse(ack.accepted());
